@@ -21,13 +21,18 @@ def trace_lines_model_checking_mode(stdout) -> typing.List[typing.List[str]]:
         """One line before the beginning of the trace."""
         single_state_trace_header = "is violated by the initial state" in line
         mult_state_trace_header = line == "Error: The behavior up to this point is:"
-        return single_state_trace_header or mult_state_trace_header
+        prop_violation_trace_header = line == "Error: The following behavior constitutes a counter-example:"
+        return single_state_trace_header or mult_state_trace_header or prop_violation_trace_header
 
     def is_start_of_new_trace(line):
         """When there are multiple traces, closes the previous trace"""
 
         # when there are multiple violations, a new trace report starts with:
-        continue_case = line.startswith("Error: Invariant")
+        continue_case = (
+                line.startswith("Error: Invariant")
+                or line.startswith("Error: Action property")
+                or line.startswith("Error: Temporal properties were violated.")
+        )
 
         # when the first violation was in the init state, the second one starts with:
         init_state_continue_case = line.startswith("Finished computing initial states")
