@@ -13,6 +13,15 @@ class ITFNode(object):
         and I don't want to think about circular reference right now."""
 
 
+class ITFModelValue(ITFNode):
+
+    def __init__(self, name):
+        self.name = name
+
+    def __eq__(self, other):
+        return isinstance(other, ITFModelValue) and self.name == other.name
+
+
 class ITFRecord(ITFNode):
     """{ "field1": <expr>, ..., "fieldN": <expr> }"""
 
@@ -103,12 +112,8 @@ class ITFTrace(ITFNode):
 
     def __eq__(self, other):
         """Overrides the default implementation"""
-        if isinstance(other, ITFState):
-            return (
-                self.meta == other.meta
-                and self.vars == other.vars
-                and self.states == other.states
-            )
+        if isinstance(other, ITFTrace):
+            return self.meta == other.meta and self.vars == other.vars and self.states == other.states
         return False
 
 
@@ -121,6 +126,9 @@ class Visitor:
         method_name = f"visit_{type(node).__name__}"
         method = getattr(self, method_name)
         return method(node, *arg, **kw)
+
+    def visit_ITFModelValue(self, node, *arg, **kw):
+        return node
 
     def visit_ITFRecord(self, node, *arg, **kw):
         elements = {k: self.visit(v) for k, v in node.elements.items()}
@@ -148,6 +156,9 @@ class Visitor:
 
 
 class JsonSerializer(Visitor):
+    def visit_ITFModelValue(self, node, *arg, **kw):
+        return {"#modelvalue": node.name}
+
     def visit_ITFRecord(self, node, *arg, **kw):
         elements = {k: self.visit(v) for k, v in node.elements.items()}
         return elements
