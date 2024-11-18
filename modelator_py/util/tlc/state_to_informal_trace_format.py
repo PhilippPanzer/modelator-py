@@ -1,4 +1,4 @@
-from modelator_py.util.informal_trace_format import ITFMap, ITFSet, ITFState
+from modelator_py.util.informal_trace_format import ITFMap, ITFModelValue, ITFSet, ITFState
 from modelator_py.util.tla import parser, visit
 from modelator_py.util.tla.to_str import Nodes
 
@@ -48,6 +48,8 @@ class Visitor(visit.NodeTransformer):
 
     def visit_Opaque(self, node, *arg, **kw):
         # .name
+        if kw.get("in_rhs") is True:
+            return ITFModelValue(node.name)
         return node.name
 
     def visit_List(self, node, *arg, **kw):
@@ -129,6 +131,8 @@ class Visitor(visit.NodeTransformer):
         if type(node.op) == Nodes.Eq:
             assert len(node.operands) == 2
             variable_name = node.operands[0].name
+            kw = {k: v for k, v in kw.items()}
+            kw["in_rhs"] = True
             variable_value = self.visit(node.operands[1], *arg, **kw)
             return [variable_name, variable_value]
         if type(node.op) == Nodes.Opaque:
