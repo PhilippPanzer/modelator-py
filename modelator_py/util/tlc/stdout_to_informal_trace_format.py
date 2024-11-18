@@ -1,4 +1,5 @@
 import typing
+import re
 
 from modelator_py.util.informal_trace_format import ITFTrace
 
@@ -56,7 +57,7 @@ def trace_lines_model_checking_mode(stdout) -> typing.List[typing.List[str]]:
         if is_start_of_new_trace(line):
             header_open = True
             if 0 < header_cnt:
-                trace = lines[header_ix + 1 : i]
+                trace = [line for line in lines[header_ix + 1 : i] if line]
                 ret.append(trace)
 
         if is_header(line):
@@ -68,7 +69,7 @@ def trace_lines_model_checking_mode(stdout) -> typing.List[typing.List[str]]:
         if header_open and is_footer(line):
             header_open = False
             if 0 < header_cnt:
-                trace = lines[header_ix + 1 : i]
+                trace = [line for line in lines[header_ix + 1 : i] if line]
                 ret.append(trace)
             break
 
@@ -110,7 +111,7 @@ def trace_lines_simulation_mode(stdout) -> typing.List[typing.List[str]]:
     return ret
 
 
-def split_into_states(lines: typing.List[str]) -> typing.List[typing.List[str]]:
+def split_into_states(lines: typing.List[str]) -> typing.Tuple[typing.List[typing.List[str]], typing.Optional[typing.Tuple[int, int]]]:
     """
     Converts a TLA+/ASCII trace string expression into a list of TLA+ state
     string expressions. Requires removing non-TLA+ ascii from the trace string
@@ -122,8 +123,13 @@ def split_into_states(lines: typing.List[str]) -> typing.List[typing.List[str]]:
     """
     ret = []
     HEADER = "State "
+    LOOP_MARKER = "Back to state "
     header_cnt = 0
     header_ix = -1
+
+    loop_marker_idx = None
+    loop_start_state = -1
+    loop_end_state = -1
 
     # this is for the case when the invariant is violated in the initial state
     # then, the counterexample is not prefixed with "State "
@@ -135,10 +141,23 @@ def split_into_states(lines: typing.List[str]) -> typing.List[typing.List[str]]:
                 ret.append(lines[header_ix + 1 : i])
             header_ix = i
             header_cnt += 1
-    if 0 < header_cnt:
-        ret.append(lines[header_ix + 1 :])
+        elif line.startswith(LOOP_MARKER):
+            m = re.match(r"Back to state (?P<loop_start>\d+):", line)
+            assert m, f"Unexpected line: '{line}'"
+            loop_marker_idx = i
+            loop_start_state = int(m.groupdict()["loop_start"])
+            loop_end_state = header_cnt
 
-    return ret
+    if 0 < header_cnt:
+        if loop_marker_idx is None:
+            ret.append(lines[header_ix + 1 :])
+        else:
+            ret.append(lines[header_ix + 1 : loop_marker_idx])
+
+    if loop_marker_idx is None:
+        return ret, None
+    else:
+        return ret, (loop_start_state, loop_end_state)
 
 
 def extract_traces(stdout: str):
@@ -155,9 +174,15 @@ def extract_traces(stdout: str):
         traces = trace_lines_simulation_mode(stdout)
     else:
         traces = trace_lines_model_checking_mode(stdout)
-    traces = [split_into_states(t) for t in traces]  # type:ignore
-    traces = [["\n".join(lines) for lines in t] for t in traces]
-    return traces
+    traces_with_loop_info = [split_into_states(t) for t in traces]
+
+    # get list of traces, each trace is a list of states, each state a list of lines
+    traces_split = [t[0] for t in traces_with_loop_info]
+    loop_infos = [t[1] for t in traces_with_loop_info]
+
+    # get list of traces, where each trace is a list of states, a state is a string of the TLA+ formula
+    traces_state_strings = [["\n".join(lines) for lines in t] for t in traces_split]
+    return traces_state_strings, loop_infos
 
 
 def tlc_trace_to_informal_trace_format_trace(trace: typing.List[str]):
