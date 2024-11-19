@@ -36,7 +36,7 @@ def json_to_cmd(json) -> PureCmd:
     return cmd
 
 
-def tlc_pure(*, cmd: PureCmd = None, json=None):  # type: ignore
+def tlc_pure(*, cmd: PureCmd = None, json=None, read_files=True):  # type: ignore
     """
     Run a TLC command using either a PureCmd object, or build the PureCmd from json.
 
@@ -70,13 +70,14 @@ def tlc_pure(*, cmd: PureCmd = None, json=None):  # type: ignore
 
         result = tlc_raw(cmd=raw_cmd)
 
-        # Read dir contents (not recursively)
-        all_files = read_entire_dir_contents(dirname)
-        all_files = {os.path.basename(fn): content for fn, content in all_files.items()}
-        # Throw out the files that the user gave as input
-        ret["files"] = {
-            fn: content for fn, content in all_files.items() if fn not in cmd.files
-        }
+        if read_files:
+            # Read dir contents (not recursively)
+            all_files = read_entire_dir_contents(dirname)
+            all_files = {os.path.basename(fn): content for fn, content in all_files.items()}
+            # Throw out the files that the user gave as input
+            ret["files"] = {
+                fn: content for fn, content in all_files.items() if fn not in cmd.files
+            }
 
     stdout_pretty = result.stdout.decode()
     stderr_pretty = result.stderr.decode()
