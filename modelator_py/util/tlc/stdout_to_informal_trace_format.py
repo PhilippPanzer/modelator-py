@@ -1,22 +1,13 @@
 import typing
 import re
+from typing import Iterator
 
 from modelator_py.util.informal_trace_format import ITFTrace
 
 from .state_to_informal_trace_format import state_to_informal_trace_format_state
 
 
-def trace_lines_model_checking_mode(stdout) -> typing.List[typing.List[str]]:
-    """
-    Returns list of lists. Each sublist is a list of lines
-    that make a trace.
-
-    Args:
-        stdout : stdout of TLC execution run in model checking mode
-    """
-    ret = []
-    lines = stdout.split("\n")
-    header_open = False
+def _trace_lines_model_checking_mode(line_iter: typing.Iterator[str]) -> typing.Iterator[typing.List[str]]:
 
     def is_header(line):
         """One line before the beginning of the trace."""
@@ -51,14 +42,24 @@ def trace_lines_model_checking_mode(stdout) -> typing.List[typing.List[str]]:
 
         return single_state_footer or multi_state_footer
 
+    header_open = False
     header_cnt = 0
     header_ix = -1
-    for i, line in enumerate(lines):
+    trace = []
+
+    for i, line in enumerate(line_iter):
+        line = line.strip("\n")
+        if (header_ix >= 0
+                and not is_start_of_new_trace(line)
+                and not (is_header(line) or is_footer(line))
+                and line):
+            trace.append(line)
+
         if is_start_of_new_trace(line):
             header_open = True
             if 0 < header_cnt:
-                trace = [line for line in lines[header_ix + 1 : i] if line]
-                ret.append(trace)
+                yield trace
+                trace = []
 
         if is_header(line):
             header_cnt += 1
@@ -69,11 +70,28 @@ def trace_lines_model_checking_mode(stdout) -> typing.List[typing.List[str]]:
         if header_open and is_footer(line):
             header_open = False
             if 0 < header_cnt:
-                trace = [line for line in lines[header_ix + 1 : i] if line]
-                ret.append(trace)
+                yield trace
             break
 
-    return ret
+def trace_lines_model_checking_mode_from_file(f) -> typing.Iterator[typing.List[str]]:
+    """
+    Returns list of lists. Each sublist is a list of lines
+    that make a trace.
+
+    Args:
+        stdout : stdout of TLC execution run in model checking mode
+    """
+    return _trace_lines_model_checking_mode(f)
+
+def trace_lines_model_checking_mode(stdout) -> typing.List[typing.List[str]]:
+    """
+    Returns list of lists. Each sublist is a list of lines
+    that make a trace.
+
+    Args:
+        stdout : stdout of TLC execution run in model checking mode
+    """
+    return list(_trace_lines_model_checking_mode(stdout.split("\n")))
 
 
 def trace_lines_simulation_mode(stdout) -> typing.List[typing.List[str]]:
@@ -159,17 +177,30 @@ def split_into_states(lines: typing.List[str]) -> typing.Tuple[typing.List[typin
     else:
         return ret, (loop_start_state, loop_end_state)
 
+def extract_traces_from_file(f: Iterator[str]) -> Iterator[list]:
+    """
+    Extract zero, one or more traces from the input string iterator.
+
+    This generator yields 2-tuples, where the first entry is a trace
+    and the second entry contains loop information in the case of lassos, or None if it's a normal trace.
+    A trace is a list of substrings from the input and each substring is a state.
+    """
+    for trace in trace_lines_model_checking_mode_from_file(f):
+        trace_with_loop_info = split_into_states(trace)
+        trace_split = trace_with_loop_info[0]
+        loop_info = trace_with_loop_info[1]
+        trace_state_strings = ["\n".join(lines) for lines in trace_split]
+        yield trace_state_strings, loop_info
 
 def extract_traces(stdout: str):
     """
     Extract zero, one or more traces from the stdout of TLC.
 
-    A trace returned by this function is a list of lists of substrings of stdout.
+    This function returns a 2-tuple, where the first entry is the list of traces
+    and the second entry contains loop information in the case of lassos.
+    The list of traces is a list of sublists of substrings from the input.
     Each sublist of substrings is a trace and each substring is a state.
-
-    WARNING: Does not support lasso traces
     """
-    traces = None
     if "Running Random Simulation" in stdout:
         traces = trace_lines_simulation_mode(stdout)
     else:
@@ -183,7 +214,6 @@ def extract_traces(stdout: str):
     # get list of traces, where each trace is a list of states, a state is a string of the TLA+ formula
     traces_state_strings = [["\n".join(lines) for lines in t] for t in traces_split]
     return traces_state_strings, loop_infos
-
 
 def tlc_trace_to_informal_trace_format_trace(trace: typing.List[str]):
     """
