@@ -4,7 +4,7 @@ from modelator_py.util.informal_trace_format import with_lists, with_records
 from modelator_py.util.tlc.itf import TlcITFCmd, tlc_itf
 from modelator_py.util.tlc.stdout_to_informal_trace_format import (
     extract_traces,
-    tlc_trace_to_informal_trace_format_trace,
+    tlc_trace_to_informal_trace_format_trace, extract_traces_from_file,
 )
 
 from ...helper import get_resource_dir
@@ -20,14 +20,24 @@ def test_extract_no_trace_from_tlc():
     tlc_traces, loop_infos = extract_traces(content)
     assert len(tlc_traces) == 0
 
+def test_extract_no_trace_from_tlc_file():
+    fn = "TlcTraceAbsenceParse.txt"
+    fn = os.path.join(get_resource_dir(), fn)
+    with open(fn, "r") as fd:
+        ret = list(extract_traces_from_file(fd))
+    assert len(ret) == 0
 
 def _extract_trace_from_tlc(fn):
     fn = os.path.join(get_resource_dir(), fn)
-    content = None
     with open(fn, "r") as fd:
         content = fd.read()
 
     return extract_traces(content)
+
+def _extract_trace_from_tlc_file(fn):
+    fn = os.path.join(get_resource_dir(), fn)
+    with open(fn, "r") as fd:
+        return list(extract_traces_from_file(fd))
 
 
 def test_extract_trace_from_tlc():
@@ -35,18 +45,32 @@ def test_extract_trace_from_tlc():
     tlc_traces, loop_infos = _extract_trace_from_tlc(fn)
     assert len(tlc_traces) == 1
 
+def test_extract_trace_from_tlc_file():
+    fn = "TlcTraceParse.txt"
+    tlc_traces_and_loop_infos = _extract_trace_from_tlc_file(fn)
+    assert len(tlc_traces_and_loop_infos ) == 1
+    assert tlc_traces_and_loop_infos[0][1] is None
+
 
 def test_extract_trace_initState_from_tlc():
     fn = "TlcTraceParseInitState.txt"
     tlc_traces, loop_infos = _extract_trace_from_tlc(fn)
     assert len(tlc_traces) == 1
 
+def test_extract_trace_initState_from_tlc_file():
+    fn = "TlcTraceParseInitState.txt"
+    tlc_traces = _extract_trace_from_tlc_file(fn)
+    assert len(tlc_traces) == 1
 
 def test_extract_trace_initStateContinue_from_tlc():
     fn = "TlcTraceParseInitStateContinue.txt"
     tlc_traces, loop_infos = _extract_trace_from_tlc(fn)
     assert len(tlc_traces) == 3
 
+def test_extract_trace_initStateContinue_from_tlc_file():
+    fn = "TlcTraceParseInitStateContinue.txt"
+    tlc_traces = _extract_trace_from_tlc_file(fn)
+    assert len(tlc_traces) == 3
 
 def test_extract_trace_from_tlc_simulation_mode():
     fn = "TlcTraceParseSimulationMode.txt"
