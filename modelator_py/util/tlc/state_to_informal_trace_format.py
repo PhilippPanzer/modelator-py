@@ -173,5 +173,12 @@ def state_to_informal_trace_format_state(state_expr_str: str):
     tree = parser.parse_expr(state_expr_str, nodes=Nodes)
     visitor = Visitor()
     var_value_pairs = visitor.visit(tree)
+
+    # quick fix: if the state consists of a single variable, then the top node is not
+    # a List node and visit returns a single var value pair instead of a list of var value pairs.
+    # Fix by wrapping into an additional list.
+    if var_value_pairs and isinstance(var_value_pairs[0], str):
+        var_value_pairs = [var_value_pairs]
+
     var_value_map = {key: value for key, value in var_value_pairs}
     return ITFState(var_value_map)
